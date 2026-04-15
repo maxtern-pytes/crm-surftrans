@@ -13,6 +13,9 @@ async function webSearch(query, maxResults = 5) {
   try {
     console.log(`🔍 Searching web for: ${query}`);
     
+    // Add a small delay to avoid being blocked
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
     const searchResults = await search(query, { 
       safeSearch: 'OFF',
       maxResults: maxResults 
@@ -28,6 +31,7 @@ async function webSearch(query, maxResults = 5) {
     return results;
   } catch (error) {
     console.error('Web search error:', error.message);
+    // Return empty array but don't crash
     return [];
   }
 }
@@ -74,20 +78,26 @@ async function fetchWebpage(url) {
 async function searchAndGetAnswer(query, maxResults = 3) {
   console.log(`🌐 Internet search for: ${query}`);
   
+  // Add delay before search to avoid rate limiting
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  
   // Step 1: Search the web
   const searchResults = await webSearch(query, maxResults);
   
   if (searchResults.length === 0) {
+    console.log('⚠️ No search results found, AI will use training data');
     return {
       query,
       sources: [],
-      summary: 'No search results found.'
+      context: '',
+      summary: 'No search results found. Using AI training data.'
     };
   }
 
-  // Step 2: Fetch content from top results
+  // Step 2: Fetch content from top results (with delays)
   const fetchedContent = [];
   for (const result of searchResults.slice(0, 2)) {
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Delay between fetches
     const content = await fetchWebpage(result.url);
     if (content) {
       fetchedContent.push({
