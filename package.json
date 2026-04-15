@@ -1,0 +1,13 @@
+{
+  "name": "surftrans-freight-broker",
+  "version": "1.0.0",
+  "description": "SurfTrans - US Freight Broker Agent Platform",
+  "private": true,
+  "scripts": {
+    "backend": "cd backend && node server.js",
+    "frontend": "cd frontend && npx vite --port 5173",
+    "seed": "cd backend && node db/seed.js",
+    "build": "cd frontend && npx vite build",
+    "start": "cd backend && node server.js"
+  }
+}
