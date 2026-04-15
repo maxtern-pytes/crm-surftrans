@@ -1,10 +1,16 @@
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../db/database');
 const ollamaService = require('./ollama');
+const cloudAI = require('./cloud-ai');
 const emailService = require('./email');
 const chatService = require('./chat');
 const taskService = require('./tasks');
 const aiLearningService = require('./ai-learning');
+
+// Use cloud AI if API key is available, otherwise fallback to Ollama
+const useCloudAI = !!process.env.TOGETHER_API_KEY;
+const aiService = useCloudAI ? cloudAI : ollamaService;
+console.log(`🤖 AI Service: ${useCloudAI ? 'Cloud AI (Together AI)' : 'Local Ollama'}`);
 
 /**
  * AI Agent Orchestrator - Coordinates all AI services for autonomous operations
@@ -73,7 +79,7 @@ Return JSON with this exact structure:
   "missing_info": ["<list of missing required information>"]
 }`;
 
-  const response = await ollamaService.callOllama(prompt,
+  const response = await aiService.callOllama(prompt,
     'You are an intent classification expert for freight brokerage. Always respond with valid JSON only.'
   );
   
@@ -127,7 +133,7 @@ async function handleLoadCreation(userId, user, request, intent, clientContext) 
   }
   
   // Extract load details from request
-  const loadDetails = await chatService.createLoadFromChat(ollamaService, userId, 'agent-session', request);
+  const loadDetails = await chatService.createLoadFromChat(aiService, userId, 'agent-session', request);
   
   if (!loadDetails || !loadDetails.origin_city || !loadDetails.destination_city) {
     return {
@@ -148,7 +154,7 @@ async function handleLoadCreation(userId, user, request, intent, clientContext) 
   }
   
   // Generate AI quote with client context
-  const quote = await ollamaService.generateQuoteAnalysis(loadDetails, [], quoteContext);
+  const quote = await aiService.generateQuoteAnalysis(loadDetails, [], quoteContext);
   
   if (!quote) {
     return {
@@ -198,7 +204,7 @@ async function handleClientDiscovery(userId, user, request, intent) {
   const params = intent.extracted_params;
   
   // Call AI to discover clients
-  const prospects = await ollamaService.analyzeClientProspects({
+  const prospects = await aiService.analyzeClientProspects({
     target_regions: params.regions || ['United States'],
     industries: params.industries || [],
     target_lanes: [],
@@ -234,7 +240,7 @@ async function handleClientDiscovery(userId, user, request, intent) {
   // Generate outreach emails for top prospects
   const outreachEmails = [];
   for (const lead of storedLeads.slice(0, 3)) {
-    const email = await emailService.generateOutreachEmail(ollamaService, lead);
+    const email = await emailService.generateOutreachEmail(aiService, lead);
     if (email) {
       outreachEmails.push({ lead, email });
     }
@@ -263,7 +269,7 @@ async function handleQuoteRequest(userId, user, request, intent) {
     };
   }
   
-  const quote = await ollamaService.generateQuoteAnalysis(loadDetails);
+  const quote = await aiService.generateQuoteAnalysis(loadDetails);
   
   if (!quote) {
     return {
@@ -293,7 +299,7 @@ async function handleEmailOutreach(userId, user, request, intent) {
   for (const followUp of followUps.slice(0, 5)) {
     const daysSince = Math.floor((Date.now() - new Date(followUp.sent_at).getTime()) / (1000 * 60 * 60 * 24));
     
-    const followUpEmail = await emailService.generateFollowUpEmail(ollamaService, followUp, followUp, daysSince);
+    const followUpEmail = await emailService.generateFollowUpEmail(aiService, followUp, followUp, daysSince);
     
     if (followUpEmail) {
       emailService.logEmail({
@@ -391,7 +397,7 @@ User query: ${request}
 `;
   }
   
-  const response = await ollamaService.callOllama(contextPrompt,
+  const response = await aiService.callOllama(contextPrompt,
     'You are SurfTrans AI, a helpful freight broker assistant with deep client knowledge. Be concise and professional.'
   );
   
