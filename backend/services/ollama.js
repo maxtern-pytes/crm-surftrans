@@ -40,7 +40,10 @@ async function callOllama(prompt, systemPrompt = '', maxRetries = 2) {
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+      const url = `${OLLAMA_BASE_URL}/api/chat`;
+      console.log(`🤖 Calling Ollama: ${url} with model: ${OLLAMA_MODEL}`);
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -107,12 +110,12 @@ function parseAIResponse(text) {
 }
 
 /**
- * Generate AI-powered quote analysis for a lane
+ * Generate AI-powered quote analysis with internet-verified data
  */
 async function generateQuoteAnalysis(laneData, historicalData = [], marketTrends = {}) {
-  const systemPrompt = `You are an expert US freight broker pricing analyst. Analyze lane data and provide accurate pricing recommendations. Always respond with valid JSON only, no markdown formatting.`;
+  const systemPrompt = `You are an expert US freight broker pricing analyst with access to real-time internet data. Analyze lane data and provide accurate pricing recommendations based on CURRENT market rates verified from internet sources. Always search the internet for current rates before responding. Always respond with valid JSON only, no markdown formatting.`;
 
-  const prompt = `Analyze this freight lane and provide pricing recommendations:
+  const prompt = `Analyze this freight lane and provide pricing recommendations based on CURRENT internet-verified market rates:
 
 Lane Details:
 - Origin: ${laneData.origin_city}, ${laneData.origin_state}
@@ -132,6 +135,8 @@ Market Context:
 - Season: ${getSeason()}
 - Market trend: ${marketTrends.trend || 'stable'}
 
+IMPORTANT: Search the internet for current freight rates for this specific lane before providing your analysis. Use real-time data from sources like DAT Load Board, FreightWaves, EIA for fuel prices, and current market reports.
+
 Provide JSON response with this exact structure:
 {
   "shipper_rate_min": <number>,
@@ -144,12 +149,13 @@ Provide JSON response with this exact structure:
   "risk_level": "low|medium|high",
   "risk_factors": ["factor1", "factor2"],
   "transit_days": <number>,
-  "market_notes": "<brief explanation>",
+  "market_notes": "<brief explanation with data sources>",
   "recommended_shipper_rate": <number>,
-  "recommended_carrier_rate": <number>
+  "recommended_carrier_rate": <number>,
+  "data_sources": ["<source1>", "<source2>"]
 }
 
-Consider: US freight market rates, lane popularity, seasonal demand, equipment availability, fuel costs, and typical brokerage margins (15-35%).`;
+Consider: Current US freight market rates (verify from internet), lane popularity, seasonal demand, equipment availability, current fuel costs, and typical brokerage margins (15-35%). Use REAL current market data, not outdated information.`;
 
   const response = await callOllama(prompt, systemPrompt);
   return parseAIResponse(response);

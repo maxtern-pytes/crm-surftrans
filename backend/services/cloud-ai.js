@@ -1,6 +1,6 @@
 /**
- * Cloud AI Service - Together AI Integration
- * Provides internet-capable AI with web search
+ * Cloud AI Service - Together AI Integration with Web Search
+ * Provides internet-capable AI with web search for real-time data
  * 
  * Sign up: https://api.together.ai/
  * Free tier: $25 credit
@@ -9,16 +9,34 @@
 const TOGETHER_API_URL = 'https://api.together.xyz/v1/chat/completions';
 const TOGETHER_API_KEY = process.env.TOGETHER_API_KEY;
 const AI_MODEL = process.env.AI_MODEL || 'meta-llama/Llama-3.2-1B-Instruct-Turbo';
+const webSearch = require('./web-search');
 
 // In-memory cache
 const cache = new Map();
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
+// Web search cache
+const searchCache = new Map();
+const SEARCH_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
 /**
  * Call Together AI API with web search capability
  */
 async function callCloudAI(prompt, systemPrompt = '', maxRetries = 2) {
-  const cacheKey = `${AI_MODEL}:${prompt.substring(0, 100)}`;
+  // Check if we should search the web first
+  const needsWebSearch = shouldSearchWeb(prompt);
+  
+  let webContext = '';
+  if (needsWebSearch) {
+    webContext = await getWebContext(prompt);
+  }
+  
+  // Add web context to prompt if available
+  const enhancedPrompt = webContext ? 
+    `${prompt}\n\n---\n\nAdditional real-time information from internet search:\n${webContext}` : 
+    prompt;
+  
+  const cacheKey = `${AI_MODEL}:${enhancedPrompt.substring(0, 100)}`;
   
   // Check cache
   if (cache.has(cacheKey)) {
@@ -46,11 +64,11 @@ async function callCloudAI(prompt, systemPrompt = '', maxRetries = 2) {
           messages: [
             {
               role: 'system',
-              content: systemPrompt || 'You are a helpful AI assistant for US freight brokerage with access to current market data and internet knowledge.'
+              content: systemPrompt || 'You are a helpful AI assistant for US freight brokerage with access to real-time internet data.'
             },
             {
               role: 'user',
-              content: prompt
+              content: enhancedPrompt
             }
           ],
           temperature: 0.3,
@@ -77,7 +95,7 @@ async function callCloudAI(prompt, systemPrompt = '', maxRetries = 2) {
     } catch (error) {
       console.error(`Cloud AI call attempt ${attempt} failed:`, error.message);
       if (attempt === maxRetries) {
-        throw new Error(`AI service unavailable: ${error.message}`);
+        throw new Error(`AI service unavailable after ${maxRetries} attempts. Please try manual entry.`);
       }
       // Wait before retry
       await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
@@ -103,12 +121,12 @@ function parseAIResponse(text) {
 }
 
 /**
- * Generate AI-powered quote analysis for a lane
+ * Generate AI-powered quote analysis with internet-verified data
  */
 async function generateQuoteAnalysis(laneData, historicalData = [], marketTrends = {}) {
-  const systemPrompt = `You are an expert US freight broker pricing analyst with access to current market rates. Analyze lane data and provide accurate pricing recommendations based on real-world freight market conditions. Always respond with valid JSON only, no markdown formatting.`;
+  const systemPrompt = `You are an expert US freight broker pricing analyst with access to real-time internet data. Analyze lane data and provide accurate pricing recommendations based on CURRENT market rates verified from internet sources. Always search the internet for current rates before responding. Always respond with valid JSON only, no markdown formatting.`;
 
-  const prompt = `Analyze this freight lane and provide pricing recommendations based on current US market rates:
+  const prompt = `Analyze this freight lane and provide pricing recommendations based on CURRENT internet-verified market rates:
 
 Lane Details:
 - Origin: ${laneData.origin_city}, ${laneData.origin_state}
@@ -128,6 +146,8 @@ Market Context:
 - Season: ${getSeason()}
 - Market trend: ${marketTrends.trend || 'stable'}
 
+IMPORTANT: Search the internet for current freight rates for this specific lane before providing your analysis. Use real-time data from sources like DAT Load Board, FreightWaves, EIA for fuel prices, and current market reports.
+
 Provide JSON response with this exact structure:
 {
   "shipper_rate_min": <number>,
@@ -140,12 +160,13 @@ Provide JSON response with this exact structure:
   "risk_level": "low|medium|high",
   "risk_factors": ["factor1", "factor2"],
   "transit_days": <number>,
-  "market_notes": "<brief explanation>",
+  "market_notes": "<brief explanation with data sources>",
   "recommended_shipper_rate": <number>,
-  "recommended_carrier_rate": <number>
+  "recommended_carrier_rate": <number>,
+  "data_sources": ["<source1>", "<source2>"]
 }
 
-Consider: Current US freight market rates (2024-2026), lane popularity, seasonal demand, equipment availability, fuel costs, and typical brokerage margins (15-35%). Use real market data from your training.`;
+Consider: Current US freight market rates (verify from internet), lane popularity, seasonal demand, equipment availability, current fuel costs, and typical brokerage margins (15-35%). Use REAL current market data, not outdated information.`;
 
   const response = await callCloudAI(prompt, systemPrompt);
   return parseAIResponse(response);
@@ -387,6 +408,103 @@ function getSeason() {
   if (month >= 6 && month <= 8) return 'Summer';
   if (month >= 9 && month <= 11) return 'Fall';
   return 'Winter';
+}
+
+/**
+ * Determine if a prompt needs web search
+ */
+function shouldSearchWeb(prompt) {
+  const searchTriggers = [
+    'current rate',
+    'current market',
+    'current price',
+    'today',
+    'latest',
+    'recent',
+    'news',
+    'trending',
+    'real-time',
+    'find client',
+    'find company',
+    'contact information',
+    'email address',
+    'phone number',
+    'diesel price',
+    'fuel price',
+    'freight rate',
+    'per mile',
+    '2024',
+    '2025',
+    '2026'
+  ];
+  
+  const lowerPrompt = prompt.toLowerCase();
+  return searchTriggers.some(trigger => lowerPrompt.includes(trigger));
+}
+
+/**
+ * Get web context for a prompt
+ */
+async function getWebContext(prompt) {
+  try {
+    // Check cache first
+    const cacheKey = `search:${prompt.substring(0, 50)}`;
+    if (searchCache.has(cacheKey)) {
+      const cached = searchCache.get(cacheKey);
+      if (Date.now() - cached.timestamp < SEARCH_CACHE_TTL) {
+        return cached.context;
+      }
+      searchCache.delete(cacheKey);
+    }
+    
+    let searchQuery = '';
+    
+    // Determine what to search for based on prompt content
+    if (prompt.includes('diesel') || prompt.includes('fuel price')) {
+      searchQuery = 'current US national average diesel fuel price today EIA 2024 2025';
+    } else if (prompt.includes('freight rate') || prompt.includes('per mile') || prompt.includes('pricing')) {
+      // Extract route information
+      const fromMatch = prompt.match(/from\s+([A-Z][a-zA-Z\s]+?)(?:\s*(?:to|,))/i);
+      const toMatch = prompt.match(/to\s+([A-Z][a-zA-Z\s]+?)(?:\s*(?:for|with|,|\.))/i);
+      
+      if (fromMatch && toMatch) {
+        searchQuery = `freight rate ${fromMatch[1]} to ${toMatch[1]} per mile 2024 2025`;
+      } else {
+        searchQuery = `current freight rates per mile USA 2024 2025 DAT load board`;
+      }
+    } else if (prompt.includes('find client') || prompt.includes('find company')) {
+      const industryMatch = prompt.match(/(?:in|for)\s+([a-zA-Z\s]+?)(?:\s*(?:industry|sector|,|\.))/i);
+      const locationMatch = prompt.match(/(?:in|at)\s+([A-Z][a-zA-Z\s,]+?)(?:\s*(?:for|with|,|\.))/i);
+      
+      if (industryMatch && locationMatch) {
+        searchQuery = `${industryMatch[1]} companies ${locationMatch[1]} freight shipping contact`;
+      } else {
+        searchQuery = `top companies needing freight brokerage services USA`;
+      }
+    } else if (prompt.includes('news') || prompt.includes('trending')) {
+      searchQuery = 'freight brokerage market news trends 2024 2025';
+    } else {
+      // Generic search based on key terms
+      const keyTerms = prompt.substring(0, 100);
+      searchQuery = keyTerms;
+    }
+    
+    if (!searchQuery) return '';
+    
+    // Perform web search
+    const searchData = await webSearch.searchAndGetAnswer(searchQuery, 3);
+    
+    if (searchData.context) {
+      // Cache the result
+      searchCache.set(cacheKey, { context: searchData.context, timestamp: Date.now() });
+      return searchData.context;
+    }
+    
+    return '';
+  } catch (error) {
+    console.error('Error getting web context:', error.message);
+    return ''; // Return empty if search fails - AI will use its training data
+  }
 }
 
 /**

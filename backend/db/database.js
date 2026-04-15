@@ -45,6 +45,7 @@ function saveDb() {
 
 // Helper: run a query that modifies data (INSERT/UPDATE/DELETE)
 function run(sql, params = []) {
+  if (!db) throw new Error('Database not initialized. Call getDb() first.');
   db.run(sql, params);
   saveDb();
   return { changes: db.getRowsModified() };
@@ -52,6 +53,7 @@ function run(sql, params = []) {
 
 // Helper: get all rows
 function all(sql, params = []) {
+  if (!db) throw new Error('Database not initialized. Call getDb() first.');
   const stmt = db.prepare(sql);
   if (params.length) stmt.bind(params);
   const rows = [];
