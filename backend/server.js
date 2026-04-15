@@ -95,14 +95,22 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString(), version: '1.0.0' });
 });
 
-// Serve frontend in production
+// ONLY serve frontend in production if frontend/dist exists locally
+// (This is NOT needed when frontend and backend are separate Render services)
 const frontendPath = path.join(__dirname, '..', 'frontend', 'dist');
-app.use(express.static(frontendPath));
-app.get('*', (req, res) => {
-  if (!req.path.startsWith('/api')) {
-    res.sendFile(path.join(frontendPath, 'index.html'));
-  }
-});
+const fs = require('fs');
+
+if (fs.existsSync(path.join(frontendPath, 'index.html'))) {
+  console.log('🌐 Serving frontend from:', frontendPath);
+  app.use(express.static(frontendPath));
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api')) {
+      res.sendFile(path.join(frontendPath, 'index.html'));
+    }
+  });
+} else {
+  console.log('🔌 Frontend not found - running as API-only mode (frontend deployed separately)');
+}
 
 // Error handler
 app.use((err, req, res, next) => {
