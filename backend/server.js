@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -39,6 +40,12 @@ const corsOptions = {
       'https://surftrans-frontend.onrender.com',
       'https://surftrans-frontend.vercel.app'
     ];
+    
+    // Add CORS_ORIGINS from environment variable
+    if (process.env.CORS_ORIGINS) {
+      const envOrigins = process.env.CORS_ORIGINS.split(',').map(u => u.trim());
+      allowedOrigins.push(...envOrigins);
+    }
     
     // Allow all onrender.com domains
     const isRenderDomain = origin.endsWith('.onrender.com');
@@ -107,11 +114,12 @@ app.use((err, req, res, next) => {
 async function start() {
   try {
     console.log('\n' + '='.repeat(60));
-    console.log('🚀 Starting CRM SurfTrans with Supabase PostgreSQL');
+    console.log('🚀 Starting CRM SurfTrans');
+    console.log(`📊 Database: ${dbType === 'postgresql' ? 'PostgreSQL' : 'SQLite'}`);
     console.log('='.repeat(60) + '\n');
     
     await getDb();
-    console.log('✅ Database initialized: Supabase PostgreSQL\n');
+    console.log(`✅ Database initialized: ${dbType === 'postgresql' ? 'PostgreSQL' : 'SQLite'}\n`);
 
     app.listen(PORT, () => {
       console.log(`Freight Broker API running on http://localhost:${PORT}`);
