@@ -1,15 +1,33 @@
 const OLLAMA_BASE_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3';
+const webSearch = require('./web-search');
 
 // In-memory cache for AI responses
 const cache = new Map();
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
+// Web search cache
+const searchCache = new Map();
+const SEARCH_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
 /**
  * Call Ollama API with retry logic
  */
 async function callOllama(prompt, systemPrompt = '', maxRetries = 2) {
-  const cacheKey = `${OLLAMA_MODEL}:${prompt.substring(0, 100)}`;
+  // Check if we should search the web first
+  const needsWebSearch = shouldSearchWeb(prompt);
+  
+  let webContext = '';
+  if (needsWebSearch) {
+    webContext = await getWebContext(prompt);
+  }
+  
+  // Add web context to prompt if available
+  const enhancedPrompt = webContext ? 
+    `${prompt}\n\n---\n\nAdditional real-time information from web search:\n${webContext}` : 
+    prompt;
+  
+  const cacheKey = `${OLLAMA_MODEL}:${enhancedPrompt.substring(0, 100)}`;
   
   // Check cache
   if (cache.has(cacheKey)) {
@@ -30,11 +48,11 @@ async function callOllama(prompt, systemPrompt = '', maxRetries = 2) {
           messages: [
             {
               role: 'system',
-              content: systemPrompt || 'You are a helpful AI assistant for US freight brokerage.'
+              content: systemPrompt || 'You are a helpful AI assistant for US freight brokerage with access to real-time internet data.'
             },
             {
               role: 'user',
-              content: prompt
+              content: enhancedPrompt
             }
           ],
           stream: false,
@@ -376,10 +394,101 @@ function getSeason() {
 }
 
 /**
+ * Determine if a prompt needs web search
+ */
+function shouldSearchWeb(prompt) {
+  const searchTriggers = [
+    'current rate',
+    'current market',
+    'today',
+    'latest',
+    'recent',
+    'news',
+    'trending',
+    'real-time',
+    'find client',
+    'find company',
+    'contact information',
+    'email address',
+    'phone number',
+    '2024',
+    '2025',
+    '2026'
+  ];
+  
+  const lowerPrompt = prompt.toLowerCase();
+  return searchTriggers.some(trigger => lowerPrompt.includes(trigger));
+}
+
+/**
+ * Get web context for a prompt
+ */
+async function getWebContext(prompt) {
+  try {
+    // Check cache first
+    const cacheKey = `search:${prompt.substring(0, 50)}`;
+    if (searchCache.has(cacheKey)) {
+      const cached = searchCache.get(cacheKey);
+      if (Date.now() - cached.timestamp < SEARCH_CACHE_TTL) {
+        return cached.context;
+      }
+      searchCache.delete(cacheKey);
+    }
+    
+    let searchQuery = '';
+    
+    // Determine what to search for
+    if (prompt.includes('rate') || prompt.includes('pricing') || prompt.includes('cost')) {
+      // Extract route information
+      const fromMatch = prompt.match(/from\s+([A-Z][a-zA-Z\s]+?)(?:\s*(?:to|,))/i);
+      const toMatch = prompt.match(/to\s+([A-Z][a-zA-Z\s]+?)(?:\s*(?:for|with|,|\.))/i);
+      
+      if (fromMatch && toMatch) {
+        searchQuery = `freight rate ${fromMatch[1]} to ${toMatch[1]} per mile 2024 2025`;
+      } else {
+        searchQuery = `current freight rates per mile USA 2024 2025`;
+      }
+    } else if (prompt.includes('find client') || prompt.includes('find company')) {
+      const industryMatch = prompt.match(/(?:in|for)\s+([a-zA-Z\s]+?)(?:\s*(?:industry|sector|,|\.))/i);
+      const locationMatch = prompt.match(/(?:in|at)\s+([A-Z][a-zA-Z\s,]+?)(?:\s*(?:for|with|,|\.))/i);
+      
+      if (industryMatch && locationMatch) {
+        searchQuery = `${industryMatch[1]} companies ${locationMatch[1]} freight shipping contact`;
+      } else {
+        searchQuery = `top companies needing freight brokerage services USA`;
+      }
+    } else if (prompt.includes('news') || prompt.includes('trending')) {
+      searchQuery = 'freight brokerage market news trends 2024 2025';
+    } else {
+      // Generic search based on key terms
+      const keyTerms = prompt.substring(0, 100);
+      searchQuery = keyTerms;
+    }
+    
+    if (!searchQuery) return '';
+    
+    // Perform web search
+    const searchData = await webSearch.searchAndGetAnswer(searchQuery, 3);
+    
+    if (searchData.context) {
+      // Cache the result
+      searchCache.set(cacheKey, { context: searchData.context, timestamp: Date.now() });
+      return searchData.context;
+    }
+    
+    return '';
+  } catch (error) {
+    console.error('Error getting web context:', error.message);
+    return ''; // Return empty if search fails - Ollama will use its training data
+  }
+}
+
+/**
  * Clear cache (useful for testing)
  */
 function clearCache() {
   cache.clear();
+  searchCache.clear();
 }
 
 module.exports = {
