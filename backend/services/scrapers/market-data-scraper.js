@@ -243,6 +243,31 @@ async function getFuelSurcharge() {
 
 
 /**
+ * Get seasonal demand factors for freight market
+ * Returns demand multiplier for each month based on historical patterns
+ */
+function getSeasonalFactors() {
+  // Seasonal demand factors based on freight industry patterns
+  // 1.0 = baseline, >1.0 = higher demand, <1.0 = lower demand
+  const factors = {
+    1: 0.95,   // January - post-holiday slowdown
+    2: 0.90,   // February - winter low
+    3: 1.00,   // March - spring recovery
+    4: 1.05,   // April - spring increase
+    5: 1.10,   // May - produce season begins
+    6: 1.15,   // June - summer peak begins
+    7: 1.10,   // July - summer continue
+    8: 1.05,   // August - back-to-school
+    9: 1.10,   // September - fall increase
+    10: 1.15,  // October - pre-holiday buildup
+    11: 1.20,  // November - holiday peak
+    12: 1.25   // December - holiday rush
+  };
+
+  return factors;
+}
+
+/**
  * Get comprehensive market summary
  */
 async function getMarketSummary() {
