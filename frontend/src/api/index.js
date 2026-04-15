@@ -1,5 +1,25 @@
-// Use environment variable for production, fallback to /api for development
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+// Determine API base URL with multiple fallbacks
+const getApiBase = () => {
+  // 1. Environment variable (set during build for production)
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  // 2. If running on Render frontend domain, use Render backend
+  if (window.location.hostname.includes('onrender.com')) {
+    return 'https://surftrans-backend.onrender.com/api';
+  }
+  
+  // 3. Default to localhost for development
+  return '/api';
+};
+
+const API_BASE = getApiBase();
+
+// Debug: Log the API base URL in development
+if (import.meta.env.DEV) {
+  console.log('🔗 API Base URL:', API_BASE);
+}
 
 async function request(path, options = {}) {
   const token = localStorage.getItem('token');
