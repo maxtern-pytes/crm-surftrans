@@ -16,10 +16,10 @@ const getApiBase = () => {
 
 const API_BASE = getApiBase();
 
-// Debug: Log the API base URL in development
-if (import.meta.env.DEV) {
-  console.log('🔗 API Base URL:', API_BASE);
-}
+// Debug: Log the API base URL (always log in production too for debugging)
+console.log('🔗 API Base URL:', API_BASE);
+console.log('📍 Current hostname:', window.location.hostname);
+console.log('🔧 VITE_API_URL from env:', import.meta.env.VITE_API_URL);
 
 async function request(path, options = {}) {
   const token = localStorage.getItem('token');
@@ -32,7 +32,13 @@ async function request(path, options = {}) {
   
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const fullUrl = `${API_BASE}${path}`;
+  console.log('📡 API Request:', options.method || 'GET', fullUrl);
+
+  const res = await fetch(fullUrl, { ...options, headers });
+  
+  console.log('📨 API Response:', res.status, res.statusText);
+  
   if (res.status === 401) {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -40,7 +46,10 @@ async function request(path, options = {}) {
     throw new Error('Session expired');
   }
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
+  if (!res.ok) {
+    console.error('❌ API Error:', data);
+    throw new Error(data.error || 'Request failed');
+  }
   return data;
 }
 
