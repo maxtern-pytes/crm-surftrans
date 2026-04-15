@@ -36,7 +36,8 @@ const corsOptions = {
     const allowedOrigins = [
       'http://localhost:5173',
       'http://localhost:3000',
-      'https://surftrans-frontend.onrender.com'
+      'https://surftrans-frontend.onrender.com',
+      'https://surftrans-frontend.vercel.app'
     ];
     
     // Allow all onrender.com domains

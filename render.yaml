@@ -29,7 +29,10 @@
       "rootDir": "frontend",
       "buildCommand": "npm install && npm run build",
       "staticPublishPath": "./dist",
-      "autoDeploy": true
+      "autoDeploy": true,
+      "envVars": [
+        { "key": "VITE_API_URL", "value": "https://surftrans-backend.onrender.com/api" }
+      ]
     }
   ]
 }
