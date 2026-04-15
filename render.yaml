@@ -1,0 +1,27 @@
+{
+  "$schema": "https://render.com/schema.json",
+  "services": [
+    {
+      "type": "web",
+      "name": "surftrans-backend",
+      "env": "node",
+      "buildCommand": "npm install",
+      "startCommand": "node server.js",
+      "envVars": [
+        { "key": "NODE_ENV", "value": "production" },
+        { "key": "PORT", "value": "3001" },
+        { "key": "DB_TYPE", "value": "sqlite" },
+        { "key": "OLLAMA_URL", "value": "https://your-ollama-service.url" },
+        { "key": "OLLAMA_MODEL", "value": "qwen2.5:0.5b" },
+        { "key": "JWT_SECRET", "value": "change-me-in-production" },
+        { "key": "ENABLE_EMAIL_SENDING", "value": "true" },
+        { "key": "SMTP_HOST", "value": "smtp.gmail.com" },
+        { "key": "SMTP_PORT", "value": "587" },
+        { "key": "SMTP_USER", "value": "orders@offcomfrt.tech" },
+        { "key": "SMTP_PASS", "value": "your-app-password" },
+        { "key": "FROM_NAME", "value": "SurfTrans AI Logistics" },
+        { "key": "FROM_EMAIL", "value": "orders@offcomfrt.tech" }
+      ]
+    }
+  ]
+}
